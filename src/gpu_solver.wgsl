@@ -18,10 +18,11 @@ var<storage, read_write> storage_array: binding_array<SimpleArray, NUM_BUFFERS>;
 @compute @workgroup_size(256, 1, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // batch across buffers
-    let buffer_index = global_id.x / 59049;
+    let buffer_index = global_id.x / 6561;
     // dispatch values to evaluate
-    let first_value = 1 + (global_id.x % 729) / 81;
-    let second_value = 1 + (global_id.x % 81) / 9;
+    let first_value = 1 + (global_id.x % 6561) / 729;
+    let second_value = 1 + (global_id.x % 729) / 81;
+    let third_value = 1 + (global_id.x % 81) / 9;
     let last_value = 1 + global_id.x % 9;
 
     // find first cell to process
@@ -40,9 +41,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             break;
         }
     }
+    // find third cell to process
+    var third_index = 0u;
+    for (var i = 1u + second_index; i < 81u; i++) {
+        if (storage_array[buffer_index].inner[i] == 0) {
+            third_index = i;
+            break;
+        }
+    }
     // find last cell to process
     var last_index = 0u;
-    for (var i = 1u + second_index; i < 81u; i++) {
+    for (var i = 1u + third_index; i < 81u; i++) {
         if (storage_array[buffer_index].inner[i] == 0) {
             last_index = i;
             break;
@@ -72,6 +81,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let r2 = try_insert_cell(move_group, second_index, second_value);
     if (!r2.success) { return; }
     move_group = r2.mg;
+    // try to insert third value
+    let r3 = try_insert_cell(move_group, third_index, third_value);
+    if (!r3.success) { return; }
+    move_group = r3.mg;
+    // try to insert last value
+    let rl = try_insert_cell(move_group, last_index, last_value);
+    if (!rl.success) { return; }
+    move_group = rl.mg;
 
     // depth-first insert attempts
     // track depth history
@@ -90,12 +107,18 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         // try insert value
         let insert_index = last_index + depth_index + 1;
         var insert_value = depth_stack[depth_index] + 1;
-        // check if fixed value
-        if (storage_array[buffer_index].inner[insert_index] > 0) {
-            insert_value = storage_array[buffer_index].inner[insert_index];
-            // skip other branches
-            depth_stack[depth_index] = 9;
+
+        // skip if invalid move
+        if ((depth_mgs[depth_index][insert_index] & (1u << (insert_value - 1))) == 0) {
+            if ((depth_index > 0) && (depth_stack[depth_index] + 1 >= 9)) {
+                // branch exausted, back out
+                depth_stack[depth_index] = 0;
+                depth_index--;
+            }
+            depth_stack[depth_index] += 1;
+            continue;
         }
+
         let r = try_insert_cell(depth_mgs[depth_index], insert_index, insert_value);
         if (r.success) {
             // good insert
@@ -115,9 +138,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             if ((depth_index > 0) && (depth_stack[depth_index] + 1 >= 9)) {
                 // branch exausted, back out
                 depth_stack[depth_index] = 0;
-                if (depth_index > 0) {
-                    depth_index--;
-                }
+                depth_index--;
             }
             // try next leaf
             depth_stack[depth_index] += 1;

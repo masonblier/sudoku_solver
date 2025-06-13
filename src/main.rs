@@ -56,6 +56,13 @@ pub fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
         env_logger::init();
-        pollster::block_on(run_gpu());
+        let gpu_mode = if let Some(flag) = std::env::args().nth(1) {
+            flag == "gpu"
+        } else { false };
+        if gpu_mode {
+            pollster::block_on(run_gpu());
+        } else {
+            pollster::block_on(run_cpu());
+        }
     }
 }

@@ -5,7 +5,7 @@ use crate::sudoku_board::{SudokuBoard};
 
 const BOARD_BUFFER_SIZE: u64 = 81 * 4; // 81 * size_of::<u32>
 const NUM_BUFFERS: u32 = 1;
-const DISPATCH_COUNT: u32 = 9 * 9 * NUM_BUFFERS;
+const DISPATCH_COUNT: u32 = 9 * 9 * 9 * 9 * NUM_BUFFERS;
 
 
 // execute batch solve on gpu
@@ -108,7 +108,6 @@ pub async fn execute_gpu_inner(
 
     // wait for gpu
     device.poll(wgpu::PollType::Wait).unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(5000));
 
     // read data from staging buffers
     let mut data: Vec<[u32; 81]> = Vec::new();
